@@ -3,8 +3,9 @@ cmake_minimum_required(VERSION 3.12)
 project(cpp-libp2p-conan C CXX)
 
 # Include
-set(GV_other_dir z_other)
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/${GV_other_dir}/cmake")
+set(GV_other_dir_name z_other)
+set(GV_other_dir ${PROJECT_SOURCE_DIR}/${GV_other_dir_name})
+list(APPEND CMAKE_MODULE_PATH "${GV_other_dir}/cmake")
 include(common_var)
 include(helper)
 include(compiler)
@@ -23,7 +24,7 @@ macro(setup_conan)
         set(V_conan_gen_files
             "${CMAKE_BINARY_DIR}/conanbuildinfo.cmake")
         set(V_conanfile
-            "${PROJECT_SOURCE_DIR}/${GV_other_dir}/conanfile.txt")
+            "${PROJECT_SOURCE_DIR}/${GV_other_dir_name}/conanfile.txt")
         if (NOT EXISTS ${V_conanfile})
             message(WARNING "${V_conanfile} is not found!" )
         else()
@@ -70,8 +71,20 @@ macro(setup_conan)
     endif()
 endmacro()
 
+macro(setup_directories)
+    set(GV_dir_gen ${GV_other_dir}/gen)
+    set(GV_dir_gen_lib ${GV_dir_gen}/lib)
+    set(GV_dir_gen_grpc_cpp ${GV_dir_gen}/grpc_cpp)
+    dir_target(GT_dir_gen "${GV_dir_gen}" GV_other_dir)
+    dir_target(GT_dir_gen_lib "${GV_dir_gen_lib}" GT_dir_gen)
+    dir_target(GT_dir_gen_grpc_cpp "${GV_dir_gen_grpc_cpp}" GT_dir_gen)
+endmacro()
+
 macro(setup_build_environment)
-    ## Setup Conan
+    ## Setup directories
+    setup_directories()
+
+    ## Setup conan
     setup_conan()
     include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake)
 
@@ -81,7 +94,7 @@ macro(setup_build_environment)
     ### set_product_options()
 
     ## Paths
-    set(GV_external_dir ${GV_other_dir}/external/${CMAKE_CXX_COMPILER_ID})
+    set(GV_external_dir ${GV_other_dir_name}/external/${CMAKE_CXX_COMPILER_ID})
     message("External library path: ${GV_external_dir}")
     get_filename_component(GV_external_dir_a ${GV_external_dir} ABSOLUTE)
 
@@ -94,35 +107,25 @@ macro(setup_build_environment)
 
     ## Libraries
     link_directories(
-        ${GV_other_dir}/gen/lib
+        ${GV_other_dir_name}/gen/lib
         ${CONAN_LIB_DIRS}
         ${GV_external_dir_a}/lib
     )
 
     ## Output
     set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${GV_dir_gen_lib})
+    set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${GV_dir_gen_lib})
 endmacro()
 
-macro(setup_directories)
-    set(V_dir_gen ${PROJECT_SOURCE_DIR}/${GV_other_dir}/gen)
-    set(V_dir_gen_lib ${V_dir_gen}/lib)
-    add_custom_command(
-        OUTPUT "${V_dir_gen}"
-        COMMAND ${CMAKE_COMMAND} -E make_directory ${V_dir_gen}
-        DEPENDS "${PROJECT_SOURCE_DIR}/${GV_other_dir}"
-    )
-    add_custom_target(GT_dir_gen DEPENDS "${V_dir_gen}")
-    add_custom_command(
-        OUTPUT "${V_dir_gen_lib}"
-        COMMAND ${CMAKE_COMMAND} -E make_directory ${V_dir_gen_lib}
-        DEPENDS GT_dir_gen
-    )
-    add_custom_target(GT_dir_gen_lib DEPENDS "${V_dir_gen_lib}")
+macro(setup_code_gen_targets)
+    codegen_grpc(
+        "${GV_other_dir}/code_to_gen/protos" "${GV_dir_gen_grpc_cpp}"
+        GL_gen_grpc
+        GT_dir_gen_grpc_cpp)
 endmacro()
 
 macro(setup_targets)
-    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${V_dir_gen_lib})
-    set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${V_dir_gen_lib})
     add_subdirectory(src/src_libp2p)
 
     set(GV_proj_src "")
@@ -131,7 +134,8 @@ macro(setup_targets)
     file(GLOB GV_all_app "${GV_src_path}/app_*")
     file(GLOB GV_all_exec "${GV_src_path}/exec_*")
 
-    setup_directories()
+    ## Code generator
+    setup_code_gen_targets()
 
     ## Modules library
     foreach(one_dir ${GV_all_mod} ${GV_all_app})
@@ -149,7 +153,6 @@ macro(setup_targets)
 
     ## Library in one
     add_library(proj_lib STATIC ${GV_proj_src})
-    set_target_properties(proj_lib PROPERTIES ARCHIVE_OUTPUT_DIRECTORY "${V_dir_gen_lib}")
     add_dependencies(proj_lib GT_dir_gen_lib)
 
     ## Main executable
