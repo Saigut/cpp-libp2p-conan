@@ -123,7 +123,7 @@ endmacro()
 macro(setup_targets)
     set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${V_dir_gen_lib})
     set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${V_dir_gen_lib})
-    add_subdirectory(src/src-libp2p)
+    add_subdirectory(src/src_libp2p)
 
     set(GV_proj_src "")
     get_filename_component(GV_src_path "src" ABSOLUTE)
