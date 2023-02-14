@@ -1,6 +1,6 @@
 # Prologue
 cmake_minimum_required(VERSION 3.12)
-project(cpp-proj C CXX)
+project(cpp-libp2p-conan C CXX)
 
 # Include
 set(GV_other_dir z_other)
@@ -121,6 +121,10 @@ macro(setup_directories)
 endmacro()
 
 macro(setup_targets)
+    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${V_dir_gen_lib})
+    set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${V_dir_gen_lib})
+    add_subdirectory(src/src-libp2p)
+
     set(GV_proj_src "")
     get_filename_component(GV_src_path "src" ABSOLUTE)
     file(GLOB GV_all_mod "${GV_src_path}/mod_*")
