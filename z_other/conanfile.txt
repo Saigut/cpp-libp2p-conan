@@ -1,12 +1,14 @@
 [requires]
-fmt/7.1.3
-boost/1.81.0
-openssl/1.1.1s
-protobuf/3.21.4
+# refer to: https://github.com/soramitsu/soramitsu-hunter/blob/master/cmake/configs/default.cmake
+fmt/6.1.2
+zlib/1.2.11
+boost/1.72.0
+openssl/1.1.1l
+protobuf/3.11.3
 tsl-hat-trie/0.6.0
-c-ares/1.19.0
-ms-gsl/4.0.0
-yaml-cpp/0.7.0
+c-ares/1.14.0
+ms-gsl/2.0.0
+yaml-cpp/0.6.3
 
 [generators]
 cmake
