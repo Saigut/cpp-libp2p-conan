@@ -5,7 +5,7 @@ project(cpp-libp2p-conan C CXX)
 # Include
 set(GV_other_dir_name z_other)
 set(GV_other_dir ${PROJECT_SOURCE_DIR}/${GV_other_dir_name})
-list(APPEND CMAKE_MODULE_PATH "${GV_other_dir}/cmake")
+list(PREPEND CMAKE_MODULE_PATH "${GV_other_dir}/cmake")
 include(common_var)
 include(helper)
 include(compiler)
@@ -68,10 +68,15 @@ macro(setup_conan)
                 execute_process(COMMAND ${V_conan_cmd})
             endif()
         endif()
+        include(${V_conan_gen_files})
     endif()
 endmacro()
 
 macro(setup_directories)
+    set(GV_external_dir ${GV_other_dir_name}/external/${CMAKE_CXX_COMPILER_ID})
+    message("External library path: ${GV_external_dir}")
+    get_filename_component(GV_external_dir_a ${GV_external_dir} ABSOLUTE)
+
     set(GV_dir_gen ${GV_other_dir}/gen)
     set(GV_dir_gen_lib ${GV_dir_gen}/lib)
     set(GV_dir_gen_grpc_cpp ${GV_dir_gen}/grpc_cpp)
@@ -80,35 +85,40 @@ macro(setup_directories)
     dir_target(GT_dir_gen_grpc_cpp "${GV_dir_gen_grpc_cpp}" GT_dir_gen)
 endmacro()
 
+macro(setup_dependency)
+    list(PREPEND CMAKE_MODULE_PATH ${CMAKE_BINARY_DIR})
+    list(PREPEND CMAKE_PREFIX_PATH ${CMAKE_BINARY_DIR})
+
+    find_package(fmt REQUIRED)
+endmacro()
+
 macro(setup_build_environment)
     ## Setup directories
     setup_directories()
 
     ## Setup conan
     setup_conan()
-    include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake)
 
+    ## Setup dependency
+    setup_dependency()
+
+    ## Prepare code generator
+    setup_codegen()
+
+    ## Definitions
     add_definitions(${CONAN_DEFINES})
-
-    ## Setup product options
-    ### set_product_options()
-
-    ## Paths
-    set(GV_external_dir ${GV_other_dir_name}/external/${CMAKE_CXX_COMPILER_ID})
-    message("External library path: ${GV_external_dir}")
-    get_filename_component(GV_external_dir_a ${GV_external_dir} ABSOLUTE)
 
     ## Headers
     include_directories(
         include
-        ${CONAN_INCLUDE_DIRS}
+        ${GV_dir_gen_grpc_cpp}
+        ${fmt_INCLUDE_DIRS}
         ${GV_external_dir_a}/include
     )
 
     ## Libraries
     link_directories(
-        ${GV_other_dir_name}/gen/lib
-        ${CONAN_LIB_DIRS}
+        ${GV_dir_gen_lib}
         ${GV_external_dir_a}/lib
     )
 
@@ -119,10 +129,10 @@ macro(setup_build_environment)
 endmacro()
 
 macro(setup_code_gen_targets)
-    codegen_grpc(
-        "${GV_other_dir}/code_to_gen/protos" "${GV_dir_gen_grpc_cpp}"
-        GL_gen_grpc
-        GT_dir_gen_grpc_cpp)
+#    codegen_grpc(
+#        "${GV_other_dir}/code_to_gen/protos" "${GV_dir_gen_grpc_cpp}"
+#        GL_gen_grpc
+#        GT_dir_gen_grpc_cpp)
 endmacro()
 
 macro(setup_targets)

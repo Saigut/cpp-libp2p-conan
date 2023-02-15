@@ -30,6 +30,27 @@ macro(dir_target _DirTargetName _DirPath _Dep)
     add_custom_target(${_DirTargetName} DEPENDS "${_DirPath}")
 endmacro()
 
+macro(setup_codegen_grpc)
+    set(V_bin_search_path ${CONAN_BIN_DIRS})
+    unset(GV_ptotoc_cmd CACHE)
+    find_program(GV_ptotoc_cmd protoc PATHS ${V_bin_search_path} NO_DEFAULT_PATH)
+    if (NOT GV_ptotoc_cmd)
+        message(FATAL_ERROR "protoc is not found!" )
+    endif()
+    message("Found protoc: ${GV_ptotoc_cmd}")
+
+    unset(GV_ptotoc_cpp_plugin CACHE)
+    find_program(GV_ptotoc_cpp_plugin grpc_cpp_plugin PATHS ${V_bin_search_path} NO_DEFAULT_PATH)
+    if (NOT GV_ptotoc_cpp_plugin)
+        message(FATAL_ERROR "grpc_cpp_plugin is not found!")
+    endif()
+    message("Found grpc_cpp_plugin: ${GV_ptotoc_cpp_plugin}")
+endmacro()
+
+macro(setup_codegen)
+#    setup_codegen_grpc()
+endmacro()
+
 # require: conan grpc
 # _DirProto[string]: proto files path
 # _DirGenCode[string]: directory to put generated code
@@ -43,22 +64,8 @@ macro(codegen_grpc _DirProto _DirGenCode _LibName _Dep)
     if ("${V_all_proto_files}" STREQUAL "")
         message("CODEGEN GRPC WARN: Can't find proto files in directory ${_DirProto}!")
     else()
-        set(V_bin_search_path ${CONAN_BIN_DIRS})
-        unset(V_ptotoc_cmd CACHE)
-        find_program(V_ptotoc_cmd protoc PATHS ${V_bin_search_path} NO_DEFAULT_PATH)
-        if (NOT V_ptotoc_cmd)
-            message(FATAL_ERROR "protoc is not found!" )
-        endif()
-        message("Found protoc: ${V_ptotoc_cmd}")
-        unset(V_ptotoc_cpp_plugin CACHE)
-        find_program(V_ptotoc_cpp_plugin grpc_cpp_plugin PATHS ${V_bin_search_path} NO_DEFAULT_PATH)
-        if (NOT V_ptotoc_cpp_plugin)
-            message(FATAL_ERROR "grpc_cpp_plugin is not found!")
-        endif()
-        message("Found grpc_cpp_plugin: ${V_ptotoc_cpp_plugin}")
-
-        set(V_total_gen_cpp_grpc_srcs "")
-        set(V_gen_grpc_cpp_src_targets "")
+        set(V_total_gen_cpp_grpc_srcs)
+        set(V_gen_grpc_cpp_src_targets)
         foreach(one_proto_file ${V_all_proto_files})
             get_filename_component(V_bname ${one_proto_file} NAME_WE)
 
@@ -72,11 +79,11 @@ macro(codegen_grpc _DirProto _DirGenCode _LibName _Dep)
 
             add_custom_command(
                 OUTPUT ${V_gen_cpp_grpc_srcs}
-                COMMAND ${V_ptotoc_cmd}
+                COMMAND ${GV_ptotoc_cmd}
                 ARGS --grpc_out "${_DirGenCode}"
                 --cpp_out "${_DirGenCode}"
                 -I "${V_dir_grpc_proto_a}"
-                --plugin=protoc-gen-grpc=${V_ptotoc_cpp_plugin}
+                --plugin=protoc-gen-grpc=${GV_ptotoc_cpp_plugin}
                 ${one_proto_file}
                 DEPENDS "${one_proto_file}" ${_Dep}
             )
@@ -93,12 +100,39 @@ macro(codegen_grpc _DirProto _DirGenCode _LibName _Dep)
     endif()
 endmacro()
 
+macro(add_proto_library TARGET)
+    cmake_parse_arguments(add_proto_library "" "" "" "${ARGN}")
+
+    set(protobuf_generate_GENERATE_EXTENSIONS .pb.h .pb.cc)
+
+    foreach(_proto ${add_proto_library_UNPARSED_ARGUMENTS})
+        get_filename_component(_abs_file ${_proto} ABSOLUTE)
+        get_filename_component(_abs_dir ${_abs_file} DIRECTORY)
+        get_filename_component(_basename ${_proto} NAME_WLE)
+        file(RELATIVE_PATH _rel_dir ${CMAKE_SOURCE_DIR} ${_abs_dir})
+        set(_generated_srcs)
+        foreach(_ext ${protobuf_generate_GENERATE_EXTENSIONS})
+            list(APPEND _generated_srcs "${GT_dir_gen_grpc_cpp}/${_basename}${_ext}")
+        endforeach()
+
+        add_custom_command(
+            OUTPUT ${_generated_srcs}
+            COMMAND ${GV_ptotoc_cmd}
+            ARGS --cpp_out ${GV_dir_gen_grpc_cpp} -I ${_abs_dir} ${_abs_file}
+            DEPENDS ${_abs_file} GT_dir_gen_grpc_cpp
+            COMMENT "Running cpp protocol buffer compiler on ${_proto}"
+            VERBATIM
+        )
+    endforeach()
+
+    add_library(${TARGET} ${_generated_srcs})
+    target_include_directories(${TARGET} PUBLIC ${GV_dir_gen_grpc_cpp})
+    target_link_libraries(${TARGET} protobuf::protobuf)
+endmacro()
+
 function(libp2p_install targets)
 endfunction()
 
 function(libp2p_add_library target)
     add_library(${target} ${ARGN})
-endfunction()
-
-function(add_proto_library NAME)
 endfunction()
