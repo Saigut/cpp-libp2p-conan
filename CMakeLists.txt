@@ -90,6 +90,14 @@ macro(setup_dependency)
     list(PREPEND CMAKE_PREFIX_PATH ${CMAKE_BINARY_DIR})
 
     find_package(fmt REQUIRED)
+    find_package(Boost REQUIRED)
+    find_package(OpenSSL REQUIRED)
+#    find_package(protobuf REQUIRED)
+    find_package(Protobuf REQUIRED)
+    find_package(tsl-hat-trie REQUIRED)
+    find_package(c-ares REQUIRED)
+    find_package(Microsoft.GSL REQUIRED)
+    find_package(yaml-cpp REQUIRED)
 endmacro()
 
 macro(setup_build_environment)
@@ -111,14 +119,20 @@ macro(setup_build_environment)
     ## Headers
     include_directories(
         include
+        ${CMAKE_BINARY_DIR}
         ${GV_dir_gen_grpc_cpp}
+        ${Boost_INCLUDE_DIRS}
+        ${OpenSSL_INCLUDE_DIRS}
         ${fmt_INCLUDE_DIRS}
+        ${Microsoft.GSL_INCLUDE_DIRS}
+        ${yaml-cpp_INCLUDE_DIRS}
         ${GV_external_dir_a}/include
     )
 
     ## Libraries
     link_directories(
         ${GV_dir_gen_lib}
+        ${CONAN_LIB_DIRS}
         ${GV_external_dir_a}/lib
     )
 

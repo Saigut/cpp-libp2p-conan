@@ -100,35 +100,74 @@ macro(codegen_grpc _DirProto _DirGenCode _LibName _Dep)
     endif()
 endmacro()
 
-macro(add_proto_library TARGET)
-    cmake_parse_arguments(add_proto_library "" "" "" "${ARGN}")
+function(compile_proto_to_cpp PB_H PB_CC PROTO)
+#    get_target_property(Protobuf_INCLUDE_DIR protobuf::libprotobuf INTERFACE_INCLUDE_DIRECTORIES)
+#    get_target_property(Protobuf_PROTOC_EXECUTABLE protobuf::protoc IMPORTED_LOCATION_RELEASE)
 
-    set(protobuf_generate_GENERATE_EXTENSIONS .pb.h .pb.cc)
+    if ("${Protobuf_PROTOC_EXECUTABLE}" STREQUAL "")
+        message(FATAL_ERROR "Protobuf_PROTOC_EXECUTABLE is empty")
+    endif ()
+    if ("${Protobuf_INCLUDE_DIR}" STREQUAL "")
+        message(FATAL_ERROR "Protobuf_INCLUDE_DIR is empty")
+    endif ()
 
-    foreach(_proto ${add_proto_library_UNPARSED_ARGUMENTS})
-        get_filename_component(_abs_file ${_proto} ABSOLUTE)
-        get_filename_component(_abs_dir ${_abs_file} DIRECTORY)
-        get_filename_component(_basename ${_proto} NAME_WLE)
-        file(RELATIVE_PATH _rel_dir ${CMAKE_SOURCE_DIR} ${_abs_dir})
-        set(_generated_srcs)
-        foreach(_ext ${protobuf_generate_GENERATE_EXTENSIONS})
-            list(APPEND _generated_srcs "${GT_dir_gen_grpc_cpp}/${_basename}${_ext}")
-        endforeach()
+    get_filename_component(PROTO_ABS "${PROTO}" REALPATH)
+    get_filename_component(PROTO_DIR ${PROTO_ABS} DIRECTORY)
+    # get relative (to CMAKE_BINARY_DIR) path of current proto file
+    file(RELATIVE_PATH SCHEMA_REL "${CMAKE_SOURCE_DIR}/src/src_libp2p" "${PROTO_DIR}")
+    set(SCHEMA_OUT_DIR ${CMAKE_BINARY_DIR}/generated)
+    file(MAKE_DIRECTORY ${SCHEMA_OUT_DIR})
 
-        add_custom_command(
-            OUTPUT ${_generated_srcs}
-            COMMAND ${GV_ptotoc_cmd}
-            ARGS --cpp_out ${GV_dir_gen_grpc_cpp} -I ${_abs_dir} ${_abs_file}
-            DEPENDS ${_abs_file} GT_dir_gen_grpc_cpp
-            COMMENT "Running cpp protocol buffer compiler on ${_proto}"
-            VERBATIM
+    string(REGEX REPLACE "\\.proto$" ".pb.h" GEN_PB_HEADER ${PROTO})
+    string(REGEX REPLACE "\\.proto$" ".pb.cc" GEN_PB ${PROTO})
+
+    set(GEN_COMMAND ${Protobuf_PROTOC_EXECUTABLE})
+    set(GEN_ARGS ${Protobuf_INCLUDE_DIR})
+
+    add_custom_command(
+        OUTPUT ${SCHEMA_OUT_DIR}/${SCHEMA_REL}/${GEN_PB_HEADER} ${SCHEMA_OUT_DIR}/${SCHEMA_REL}/${GEN_PB}
+        COMMAND ${GEN_COMMAND}
+        ARGS -I${CMAKE_SOURCE_DIR}/src/src_libp2p --cpp_out=${SCHEMA_OUT_DIR} ${SCHEMA_REL}/${PROTO}
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+        DEPENDS protobuf::protoc
+        VERBATIM
+    )
+
+    set(${PB_H} ${SCHEMA_OUT_DIR}/${SCHEMA_REL}/${GEN_PB_HEADER} PARENT_SCOPE)
+    set(${PB_CC} ${SCHEMA_OUT_DIR}/${SCHEMA_REL}/${GEN_PB} PARENT_SCOPE)
+endfunction()
+
+add_custom_target(generated
+    COMMENT "Building generated files..."
+    )
+
+function(disable_clang_tidy target)
+    set_target_properties(${target} PROPERTIES
+        C_CLANG_TIDY ""
+        CXX_CLANG_TIDY ""
         )
-    endforeach()
+endfunction()
 
-    add_library(${TARGET} ${_generated_srcs})
-    target_include_directories(${TARGET} PUBLIC ${GV_dir_gen_grpc_cpp})
-    target_link_libraries(${TARGET} protobuf::protobuf)
-endmacro()
+function(add_proto_library NAME)
+    set(SOURCES "")
+    foreach (PROTO IN ITEMS ${ARGN})
+        compile_proto_to_cpp(H C ${PROTO})
+        list(APPEND SOURCES ${H} ${C})
+    endforeach ()
+
+    add_library(${NAME}
+        ${SOURCES}
+        )
+    target_link_libraries(${NAME}
+        protobuf::libprotobuf
+        )
+    target_include_directories(${NAME} PUBLIC
+        ${CMAKE_BINARY_DIR}/generated/
+        )
+    disable_clang_tidy(${NAME})
+
+    add_dependencies(generated ${NAME})
+endfunction()
 
 function(libp2p_install targets)
 endfunction()
