@@ -56,12 +56,12 @@ namespace libp2p::protocol::gossip {
         };
 
     host_->setProtocolHandler(
-        {config_.protocol_version},
+        config_.protocol_version,
         [self_wptr=weak_from_this()]
-            (StreamAndProtocol stream) {
+            (protocol::BaseProtocol::StreamResult rstream) {
           auto h = self_wptr.lock();
           if (h) {
-            h->handle(std::move(stream));
+            h->handle(std::move(rstream));
           }
         }
     );
@@ -132,17 +132,23 @@ namespace libp2p::protocol::gossip {
     ctx->outbound_stream->write(std::move(serialized));
   }
 
-  peer::ProtocolName Connectivity::getProtocolId() const {
+  peer::Protocol Connectivity::getProtocolId() const {
     return config_.protocol_version;
   }
 
-  void Connectivity::handle(StreamAndProtocol stream_and_protocol) {
-    auto &stream = stream_and_protocol.stream;
-
-    if (!started_) {
-      stream->reset();
+  void Connectivity::handle(StreamResult rstream) {
+    if (!rstream) {
+      log_.info("incoming connection failed, error={}",
+                rstream.error().message());
       return;
     }
+
+    if (!started_) {
+      rstream.value()->reset();
+      return;
+    }
+
+    auto &stream = rstream.value();
 
     // no remote peer id means dead stream
     auto peer_res = stream->remotePeerId();
@@ -226,7 +232,7 @@ namespace libp2p::protocol::gossip {
     // clang-format off
     host_->newStream(
         pi,
-        {config_.protocol_version},
+        config_.protocol_version,
         [wptr = weak_from_this(), this, ctx=ctx] (auto &&rstream) mutable {
             auto self = wptr.lock();
           if (self) {
@@ -248,7 +254,7 @@ namespace libp2p::protocol::gossip {
     // clang-format off
     host_->newStream(
         ctx->peer_id,
-        {config_.protocol_version},
+        config_.protocol_version,
         [wptr = weak_from_this(), this, ctx=ctx] (auto &&rstream) mutable {
           auto self = wptr.lock();
           if (self) {
@@ -259,8 +265,9 @@ namespace libp2p::protocol::gossip {
     // clang-format on
   }
 
-  void Connectivity::onNewStream(const PeerContextPtr &ctx,
-                                 StreamAndProtocolOrError rstream) {
+  void Connectivity::onNewStream(
+      const PeerContextPtr &ctx,
+      outcome::result<std::shared_ptr<connection::Stream>> rstream) {
     ctx->is_connecting = false;
 
     assert(!ctx->outbound_stream);
@@ -274,10 +281,10 @@ namespace libp2p::protocol::gossip {
       return;
     }
 
-    auto &stream = rstream.value().stream;
+    auto &stream = rstream.value();
 
     if (!started_) {
-      stream->reset();
+      rstream.value()->reset();
       return;
     }
 

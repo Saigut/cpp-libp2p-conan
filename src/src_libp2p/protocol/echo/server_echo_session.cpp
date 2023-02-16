@@ -58,15 +58,13 @@ namespace libp2p::protocol {
     static constexpr size_t kMsgSizeThreshold = 120;
 
     if (rread.value() < kMsgSizeThreshold) {
-      log_->debug(
-          "read message: {}",
-          std::string{buf_.begin(),
-                      // NOLINTNEXTLINE(cppcoreguidelines-narrowing-conversions)
-                      buf_.begin() + rread.value()});
+      log_->debug("read message: {}",
+                 std::string{buf_.begin(), buf_.begin() + rread.value()});
     } else {
       log_->debug("read {} bytes", rread.value());
     }
-    doWrite(rread.value());
+    this->doWrite(rread.value());
+    doRead();
   }
 
   void ServerEchoSession::doWrite(size_t size) {
@@ -74,10 +72,7 @@ namespace libp2p::protocol {
       return stop();
     }
 
-    auto write_buf = std::vector<uint8_t>(
-        buf_.begin(),
-        // NOLINTNEXTLINE(cppcoreguidelines-narrowing-conversions)
-        buf_.begin() + size);
+    auto write_buf = std::vector<uint8_t>(buf_.begin(), buf_.begin() + size);
     gsl::span<const uint8_t> span = write_buf;
     stream_->write(
         span, size,
@@ -92,11 +87,8 @@ namespace libp2p::protocol {
     }
 
     if (rwrite.value() < 120) {
-      log_->info(
-          "written message: {}",
-          std::string{buf_.begin(),
-                      // NOLINTNEXTLINE(cppcoreguidelines-narrowing-conversions)
-                      buf_.begin() + rwrite.value()});
+      log_->info("written message: {}",
+                 std::string{buf_.begin(), buf_.begin() + rwrite.value()});
     } else {
       log_->info("written {} bytes", rwrite.value());
     }
@@ -104,6 +96,5 @@ namespace libp2p::protocol {
     if (!repeat_infinitely_) {
       --config_.max_server_repeats;
     }
-    doRead();
   }
 }  // namespace libp2p::protocol

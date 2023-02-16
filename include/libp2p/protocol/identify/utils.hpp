@@ -45,8 +45,8 @@ namespace libp2p::protocol::detail {
    */
   void streamToEachConnectedPeer(Host &host,
                                  network::ConnectionManager &conn_manager,
-                                 StreamProtocols protocols,
-                                 StreamAndProtocolOrErrorCb handler);
+                                 const peer::Protocol &protocol,
+                                 const Host::StreamResultHandler &handler);
 }  // namespace libp2p::protocol::detail
 
 #endif  // LIBP2P_UTILS_HPP

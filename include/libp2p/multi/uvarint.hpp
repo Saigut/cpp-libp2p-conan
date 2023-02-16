@@ -52,10 +52,7 @@ namespace libp2p::multi {
     /**
      * @return an array view to raw bytes of the stored varint
      */
-    gsl::span<const uint8_t> toBytes() const &;
-
-    /// Disable to return span to inner data of temporary object
-    gsl::span<const uint8_t> toBytes() const && = delete;
+    gsl::span<const uint8_t> toBytes() const;
 
     const std::vector<uint8_t> &toVector() const;
 

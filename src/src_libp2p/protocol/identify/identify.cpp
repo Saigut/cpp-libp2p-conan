@@ -36,12 +36,15 @@ namespace libp2p::protocol {
     return msg_processor_->getObservedAddresses().getAddressesFor(address);
   }
 
-  peer::ProtocolName Identify::getProtocolId() const {
+  peer::Protocol Identify::getProtocolId() const {
     return kIdentifyProto;
   }
 
-  void Identify::handle(StreamAndProtocol stream) {
-    msg_processor_->sendIdentify(std::move(stream.stream));
+  void Identify::handle(StreamResult stream_res) {
+    if (!stream_res) {
+      return;
+    }
+    msg_processor_->sendIdentify(std::move(stream_res.value()));
   }
 
   void Identify::start() {
@@ -49,14 +52,15 @@ namespace libp2p::protocol {
     BOOST_ASSERT(!started_);
     started_ = true;
 
-    host_.setProtocolHandler({kIdentifyProto},
-                             [wp = weak_from_this()](StreamAndProtocol stream) {
-                               if (auto self = wp.lock()) {
-                                 self->handle(std::move(stream));
-                               }
-                             });
+    host_.setProtocolHandler(
+        kIdentifyProto,
+        [wp = weak_from_this()](protocol::BaseProtocol::StreamResult rstream) {
+          if (auto self = wp.lock()) {
+            self->handle(std::move(rstream));
+          }
+        });
 
-    sub_ = bus_.getChannel<event::network::OnNewConnectionChannel>().subscribe(
+    sub_ = bus_.getChannel<network::event::OnNewConnectionChannel>().subscribe(
         [wp = weak_from_this()](auto &&conn) {
           if (auto self = wp.lock()) {
             return self->onNewConnection(conn);
@@ -85,13 +89,12 @@ namespace libp2p::protocol {
                                  std::move(remote_peer_addr_res.value())}};
 
     msg_processor_->getHost().newStream(
-        peer_info, {kIdentifyProto},
+        peer_info, kIdentifyProto,
         [self{shared_from_this()}](auto &&stream_res) {
           if (!stream_res) {
             return;
           }
-          self->msg_processor_->receiveIdentify(
-              std::move(stream_res.value().stream));
+          self->msg_processor_->receiveIdentify(std::move(stream_res.value()));
         });
   }
 }  // namespace libp2p::protocol

@@ -14,23 +14,28 @@
 #include <libp2p/outcome/outcome.hpp>
 #include <libp2p/protocol/base_protocol.hpp>
 
-namespace libp2p::event::network {
-
-  using ListenAddressAddedChannel =
-      channel_decl<struct ListenAddressAdded, multi::Multiaddress>;
-
-  using ListenAddressRemovedChannel =
-      channel_decl<struct ListenAddressRemoved, multi::Multiaddress>;
-
-}  // namespace libp2p::event::network
-
 namespace libp2p::network {
+
+  namespace event {
+    using libp2p::event::channel_decl;
+
+    struct ListenAddressAdded {};
+    using ListenAddressAddedChannel =
+        channel_decl<ListenAddressAdded, multi::Multiaddress>;
+
+    struct ListenAddressRemoved {};
+    using ListenAddressRemovedChannel =
+        channel_decl<ListenAddressRemoved, multi::Multiaddress>;
+  }  // namespace event
 
   /**
    * @brief Class, which is capable of listening (opening a server) on
    * registered transports.
    */
   struct ListenerManager {
+    using StreamResult = outcome::result<std::shared_ptr<connection::Stream>>;
+    using StreamResultFunc = std::function<void(StreamResult)>;
+
     virtual ~ListenerManager() = default;
 
     /**
@@ -89,6 +94,24 @@ namespace libp2p::network {
      */
     virtual std::vector<multi::Multiaddress> getListenAddressesInterfaces()
         const = 0;
+
+    /**
+     * @brief Add new protocol handler
+     * @param protocol protocol to be handled
+     * @param cb callback executed on new stream
+     */
+    virtual void setProtocolHandler(const peer::Protocol &protocol,
+                                    StreamResultFunc cb) = 0;
+
+    /**
+     * @brief Add new protocol handler with matcher
+     * @param protocol protocol to be handled
+     * @param cb callback executed on new stream
+     * @param matcher function, which is executed to match protocols.
+     */
+    virtual void setProtocolHandler(const peer::Protocol &protocol,
+                                    StreamResultFunc cb,
+                                    Router::ProtoPredicate matcher) = 0;
 
     /**
      * @brief Getter for Router.

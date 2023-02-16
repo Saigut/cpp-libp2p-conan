@@ -11,6 +11,7 @@
 // implementations
 #include <libp2p/basic/scheduler.hpp>
 #include <libp2p/crypto/random_generator/boost_generator.hpp>
+#include <libp2p/protocol/common/asio/asio_scheduler.hpp>
 #include <libp2p/protocol/kademlia/config.hpp>
 #include <libp2p/protocol/kademlia/impl/content_routing_table_impl.hpp>
 #include <libp2p/protocol/kademlia/impl/kademlia_impl.hpp>
@@ -77,6 +78,8 @@ namespace libp2p::injector {
     using namespace boost;  // NOLINT
     return di::make_injector<InjectorConfig>(
         // clang-format off
+
+        di::bind<crypto::random::RandomGenerator>.template to<crypto::random::BoostRandomGenerator>(),
 
         di::bind<protocol::kademlia::Config>.template to<protocol::kademlia::Config>().in(di::singleton),
         di::bind<protocol::kademlia::ContentRoutingTable>.template to<protocol::kademlia::ContentRoutingTableImpl>(),

@@ -8,7 +8,7 @@
 #include <libp2p/security/noise/noise.hpp>
 
 namespace libp2p::security {
-  peer::ProtocolName Noise::getProtocolId() const {
+  peer::Protocol Noise::getProtocolId() const {
     return kProtocolId;
   }
 
@@ -20,9 +20,8 @@ namespace libp2p::security {
         crypto_provider_{std::move(crypto_provider)},
         key_marshaller_{std::move(key_marshaller)} {}
 
-  void Noise::secureInbound(
-      std::shared_ptr<connection::LayerConnection> inbound,
-      SecurityAdaptor::SecConnCallbackFunc cb) {
+  void Noise::secureInbound(std::shared_ptr<connection::RawConnection> inbound,
+                            SecurityAdaptor::SecConnCallbackFunc cb) {
     log_->info("securing inbound connection");
     auto noise_marshaller =
         std::make_unique<noise::HandshakeMessageMarshallerImpl>(
@@ -34,7 +33,7 @@ namespace libp2p::security {
   }
 
   void Noise::secureOutbound(
-      std::shared_ptr<connection::LayerConnection> outbound,
+      std::shared_ptr<connection::RawConnection> outbound,
       const peer::PeerId &p, SecurityAdaptor::SecConnCallbackFunc cb) {
     log_->info("securing outbound connection");
     auto noise_marshaller =

@@ -60,7 +60,7 @@ namespace libp2p::protocol::kademlia {
       return Error::VALUE_NOT_FOUND;
     }
     OUTCOME_TRY(value, backend_->getValue(key));
-    return {value, it->expire_time};
+    return {value, it->updated_at};
   }
 
   bool StorageImpl::hasValue(const Key &key) const {
@@ -69,7 +69,7 @@ namespace libp2p::protocol::kademlia {
     if (it == idx.end()) {
       return false;
     }
-    return it->expire_time > scheduler_->now();
+    return it->updated_at > scheduler_->now();
   }
 
   void StorageImpl::onRefreshTimer() {

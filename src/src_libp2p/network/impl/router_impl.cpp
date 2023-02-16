@@ -15,16 +15,22 @@ OUTCOME_CPP_DEFINE_CATEGORY(libp2p::network, RouterImpl::Error, e) {
 }
 
 namespace libp2p::network {
-  void RouterImpl::setProtocolHandler(StreamProtocols protocols,
-                                      StreamAndProtocolCb cb,
-                                      ProtocolPredicate predicate) {
-    for (auto &protocol : protocols) {
-      proto_handlers_[protocol] = PredicateAndHandler{predicate, cb};
-    }
+  void RouterImpl::setProtocolHandler(const peer::Protocol &protocol,
+                                      const ProtoHandler &handler) {
+    setProtocolHandler(protocol, handler, [protocol](const auto &p) {
+      // perfect match func
+      return protocol == p;
+    });
   }
 
-  std::vector<peer::ProtocolName> RouterImpl::getSupportedProtocols() const {
-    std::vector<peer::ProtocolName> protos;
+  void RouterImpl::setProtocolHandler(const peer::Protocol &protocol,
+                                      const ProtoHandler &handler,
+                                      const ProtoPredicate &predicate) {
+    proto_handlers_[protocol] = PredicateAndHandler{predicate, handler};
+  }
+
+  std::vector<peer::Protocol> RouterImpl::getSupportedProtocols() const {
+    std::vector<peer::Protocol> protos;
     if (proto_handlers_.empty()) {
       return protos;
     }
@@ -38,7 +44,7 @@ namespace libp2p::network {
     return protos;
   }
 
-  void RouterImpl::removeProtocolHandlers(const peer::ProtocolName &protocol) {
+  void RouterImpl::removeProtocolHandlers(const peer::Protocol &protocol) {
     proto_handlers_.erase_prefix(protocol);
   }
 
@@ -47,7 +53,7 @@ namespace libp2p::network {
   }
 
   outcome::result<void> RouterImpl::handle(
-      const peer::ProtocolName &p, std::shared_ptr<connection::Stream> stream) {
+      const peer::Protocol &p, std::shared_ptr<connection::Stream> stream) {
     // firstly, try to find the longest prefix - even if it's not perfect match,
     // but a predicate one, it still will save the resources
     auto matched_proto = proto_handlers_.longest_prefix(p);
@@ -55,11 +61,10 @@ namespace libp2p::network {
       return Error::NO_HANDLER_FOUND;
     }
 
-    const auto &[predicate, cb] = matched_proto.value();
-    auto matched = matched_proto.key() == p or (predicate and predicate(p));
-    if (matched) {
+    const auto &pred_hand = matched_proto.value();
+    if (matched_proto.key() == p || pred_hand.predicate(p)) {
       // perfect or predicate match
-      cb(StreamAndProtocol{std::move(stream), matched_proto.key()});
+      pred_hand.handler(std::move(stream));
       return outcome::success();
     }
 
@@ -68,21 +73,22 @@ namespace libp2p::network {
     // predicate; the longest match is to be called
     auto matched_protos = proto_handlers_.equal_prefix_range_ks(p.data(), 2);
 
-    auto longest_match{matched_protos.second};
+    std::reference_wrapper<const ProtoHandler> longest_match{
+        matched_protos.first.value().handler};
+    size_t longest_match_size = 0;
     for (auto match = matched_protos.first; match != matched_protos.second;
          ++match) {
-      if (match->predicate and match->predicate(p)
-          and (longest_match == matched_protos.second
-               or match.key().size() > longest_match.key().size())) {
-        longest_match = match;
+      if (match.value().predicate(p)
+          && match.key().size() > longest_match_size) {
+        longest_match_size = match.key().size();
+        longest_match = match.value().handler;
       }
     }
 
-    if (longest_match == matched_protos.second) {
+    if (longest_match_size == 0) {
       return Error::NO_HANDLER_FOUND;
     }
-    longest_match->handler(
-        StreamAndProtocol{std::move(stream), longest_match.key()});
+    longest_match(std::move(stream));
     return outcome::success();
   }
 

@@ -84,13 +84,12 @@ namespace libp2p::security {
     propose_message_.pubkey.swap(public_key_res.value().key);
   }
 
-  peer::ProtocolName Secio::getProtocolId() const {
+  peer::Protocol Secio::getProtocolId() const {
     return kProtocolId;
   }
 
-  void Secio::secureInbound(
-      std::shared_ptr<connection::LayerConnection> inbound,
-      SecurityAdaptor::SecConnCallbackFunc cb) {
+  void Secio::secureInbound(std::shared_ptr<connection::RawConnection> inbound,
+                            SecurityAdaptor::SecConnCallbackFunc cb) {
     log_->info("securing inbound connection");
     auto dialer = std::make_shared<secio::Dialer>(inbound);
     sendProposeMessage(inbound, dialer, cb);
@@ -98,7 +97,7 @@ namespace libp2p::security {
   }
 
   void Secio::secureOutbound(
-      std::shared_ptr<connection::LayerConnection> outbound,
+      std::shared_ptr<connection::RawConnection> outbound,
       const peer::PeerId &p, SecurityAdaptor::SecConnCallbackFunc cb) {
     log_->info("securing outbound connection");
     auto dialer = std::make_shared<secio::Dialer>(outbound);
@@ -107,7 +106,7 @@ namespace libp2p::security {
   }
 
   void Secio::sendProposeMessage(
-      const std::shared_ptr<connection::LayerConnection> &conn,
+      const std::shared_ptr<connection::RawConnection> &conn,
       const std::shared_ptr<secio::Dialer> &dialer,
       SecurityAdaptor::SecConnCallbackFunc cb) const {
     auto proto_propose{propose_marshaller_->handyToProto(propose_message_)};
@@ -122,7 +121,7 @@ namespace libp2p::security {
   }
 
   void Secio::receiveProposeMessage(
-      const std::shared_ptr<connection::LayerConnection> &conn,
+      const std::shared_ptr<connection::RawConnection> &conn,
       const std::shared_ptr<secio::Dialer> &dialer,
       SecurityAdaptor::SecConnCallbackFunc cb) const {
     auto remote_peer_proposal_bytes = std::make_shared<std::vector<uint8_t>>();
@@ -145,7 +144,7 @@ namespace libp2p::security {
   }
 
   void Secio::sendExchangeMessage(
-      const std::shared_ptr<connection::LayerConnection> &conn,
+      const std::shared_ptr<connection::RawConnection> &conn,
       const std::shared_ptr<secio::Dialer> &dialer,
       SecurityAdaptor::SecConnCallbackFunc cb) const {
     const auto &&self{this};
@@ -176,7 +175,7 @@ namespace libp2p::security {
   }
 
   void Secio::receiveExchangeMessage(
-      const std::shared_ptr<connection::LayerConnection> &conn,
+      const std::shared_ptr<connection::RawConnection> &conn,
       const std::shared_ptr<secio::Dialer> &dialer,
       SecurityAdaptor::SecConnCallbackFunc cb) const {
     dialer->rw->read<secio::protobuf::Exchange>(
@@ -256,7 +255,7 @@ namespace libp2p::security {
   }
 
   void Secio::closeConnection(
-      const std::shared_ptr<libp2p::connection::LayerConnection> &conn,
+      const std::shared_ptr<libp2p::connection::RawConnection> &conn,
       const std::error_code &err) const {
     log_->error("error happened, closing connection: {}", err.message());
     if (auto close_res = conn->close(); !close_res) {

@@ -24,10 +24,10 @@ namespace libp2p::protocol {
     explicit Echo(EchoConfig config = EchoConfig{});
 
     // NOLINTNEXTLINE(modernize-use-nodiscard)
-    peer::ProtocolName getProtocolId() const override;
+    peer::Protocol getProtocolId() const override;
 
     // handle incoming stream
-    void handle(StreamAndProtocol stream) override;
+    void handle(StreamResult rstream) override;
 
     // create client session, which simplifies writing tests and interaction
     // with server.

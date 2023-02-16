@@ -275,6 +275,8 @@ namespace libp2p::connection {
     for (const auto &[id, handler] : streams_created) {
       auto it = streams_.find(id);
 
+      assert(it != streams_.end());
+
       if (it == streams_.end()) {
         log()->error("fresh_streams_ inconsistency!");
         continue;
@@ -465,10 +467,9 @@ namespace libp2p::connection {
         SL_DEBUG(log(), "received ACK on unknown stream id {}",
                  frame.stream_id);
         ok = false;
-      } else {
-        stream_handler = std::move(it->second);
-        erasePendingOutboundStream(it);
       }
+      stream_handler = std::move(it->second);
+      erasePendingOutboundStream(it);
     }
 
     if (!ok) {

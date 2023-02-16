@@ -12,9 +12,9 @@
 #include <libp2p/connection/capable_connection.hpp>
 #include <libp2p/event/bus.hpp>
 #include <libp2p/host/host.hpp>
-#include <libp2p/outcome/outcome.hpp>
 #include <libp2p/protocol/base_protocol.hpp>
 #include <libp2p/protocol/ping/ping_config.hpp>
+#include <libp2p/outcome/outcome.hpp>
 
 namespace libp2p::crypto::random {
   class RandomGenerator;
@@ -42,9 +42,9 @@ namespace libp2p::protocol {
          std::shared_ptr<crypto::random::RandomGenerator> rand_gen,
          PingConfig config = PingConfig{});
 
-    peer::ProtocolName getProtocolId() const override;
+    peer::Protocol getProtocolId() const override;
 
-    void handle(StreamAndProtocol stream) override;
+    void handle(StreamResult res) override;
 
     /**
      * Start pinging the peer

@@ -20,12 +20,15 @@ namespace libp2p::protocol {
       std::shared_ptr<IdentifyMessageProcessor> msg_processor, event::Bus &bus)
       : msg_processor_{std::move(msg_processor)}, bus_{bus} {}
 
-  peer::ProtocolName IdentifyPush::getProtocolId() const {
+  peer::Protocol IdentifyPush::getProtocolId() const {
     return kIdentifyPushProtocol;
   }
 
-  void IdentifyPush::handle(StreamAndProtocol stream) {
-    msg_processor_->receiveIdentify(std::move(stream.stream));
+  void IdentifyPush::handle(StreamResult stream_res) {
+    if (!stream_res) {
+      return;
+    }
+    msg_processor_->receiveIdentify(std::move(stream_res.value()));
   }
 
   void IdentifyPush::start() {
@@ -40,26 +43,25 @@ namespace libp2p::protocol {
 
     sub_handles_.reserve(kChannelsAmount);
     sub_handles_.push_back(
-        bus_.getChannel<event::network::ListenAddressAddedChannel>().subscribe(
+        bus_.getChannel<network::event::ListenAddressAddedChannel>().subscribe(
             send_push));
     sub_handles_.push_back(
-        bus_.getChannel<event::network::ListenAddressRemovedChannel>()
+        bus_.getChannel<network::event::ListenAddressRemovedChannel>()
             .subscribe(send_push));
     sub_handles_.push_back(
-        bus_.getChannel<event::peer::KeyPairChangedChannel>().subscribe(
+        bus_.getChannel<peer::event::KeyPairChangedChannel>().subscribe(
             std::move(send_push)));
   }
 
   void IdentifyPush::sendPush() {
     detail::streamToEachConnectedPeer(
         msg_processor_->getHost(), msg_processor_->getConnectionManager(),
-        {kIdentifyPushProtocol}, [self{weak_from_this()}](auto &&s_res) {
+        kIdentifyPushProtocol, [self{weak_from_this()}](auto &&s_res) {
           if (!s_res) {
             return;
           }
           if (auto t = self.lock()) {
-            return t->msg_processor_->sendIdentify(
-                std::move(s_res.value().stream));
+            return t->msg_processor_->sendIdentify(std::move(s_res.value()));
           }
         });
   }

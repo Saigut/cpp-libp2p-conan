@@ -14,9 +14,9 @@ namespace libp2p::transport {
                            std::shared_ptr<Upgrader> upgrader,
                            TransportListener::HandlerFunc handler)
       : context_(context),
+        acceptor_(context_),
         upgrader_(std::move(upgrader)),
-        handle_(std::move(handler)),
-        acceptor_(context_) {}
+        handle_(std::move(handler)) {}
 
   outcome::result<void> TcpListener::listen(
       const multi::Multiaddress &address) {
@@ -27,8 +27,6 @@ namespace libp2p::transport {
     if (acceptor_.is_open()) {
       return std::errc::already_connected;
     }
-
-    layers_ = detail::getLayers(address);
 
     // TODO(@warchant): replace with parser PRE-129
     using namespace boost::asio;  // NOLINT
@@ -98,9 +96,9 @@ namespace libp2p::transport {
               std::make_shared<TcpConnection>(self->context_, std::move(sock));
 
           auto session = std::make_shared<UpgraderSession>(
-              self->upgrader_, self->layers_, std::move(conn), self->handle_);
+              self->upgrader_, std::move(conn), self->handle_);
 
-          session->upgradeInbound();
+          session->secureInbound();
 
           self->doAccept();
         });

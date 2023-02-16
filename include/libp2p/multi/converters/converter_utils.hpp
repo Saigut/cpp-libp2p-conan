@@ -18,20 +18,11 @@ namespace libp2p::multi::converters {
 
   /**
    * Converts the given address string of the specified protocol
-   * to a byte sequence that represents the address, if both
-   * address and protocol were valid
-   */
-  outcome::result<common::ByteArray> addressToBytes(const Protocol &protocol,
-                                                    std::string_view addr);
-
-  /**
-   * Converts the given address string of the specified protocol
    * to a hex string that represents the address, if both
    * address and protocol were valid
    */
-  [[deprecated("Use `common::hex_lower(addressToBytes(...))` instead")]]  //
-  outcome::result<std::string>
-  addressToHex(const Protocol &protocol, std::string_view addr);
+  auto addressToHex(const Protocol &protocol, std::string_view addr)
+      -> outcome::result<std::string>;
 
   /**
    * Converts the given multiaddr string to a byte sequence representing

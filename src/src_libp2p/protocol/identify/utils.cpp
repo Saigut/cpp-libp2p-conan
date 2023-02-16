@@ -41,10 +41,10 @@ namespace libp2p::protocol::detail {
 
   void streamToEachConnectedPeer(Host &host,
                                  network::ConnectionManager &conn_manager,
-                                 StreamProtocols protocols,
-                                 StreamAndProtocolOrErrorCb handler) {
+                                 const peer::Protocol &protocol,
+                                 const Host::StreamResultHandler &handler) {
     for (const auto &peer : getActivePeers(host, conn_manager)) {
-      host.newStream(peer, protocols, handler);
+      host.newStream(peer, protocol, handler);
     }
   }
 }  // namespace libp2p::protocol::detail

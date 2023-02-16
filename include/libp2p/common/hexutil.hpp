@@ -81,8 +81,7 @@ namespace libp2p::common {
    * @return String
    */
   template <class Bytes>
-  inline std::string dumpBin(const Bytes &str,
-                             bool add_hex_for_non_printable = true) {
+  inline std::string dumpBin(const Bytes &str) {
     std::string ret;
     ret.reserve(str.size() + 2);
     bool non_printable_detected = false;
@@ -94,7 +93,7 @@ namespace libp2p::common {
         non_printable_detected = true;
       }
     }
-    if (non_printable_detected and add_hex_for_non_printable) {
+    if (non_printable_detected) {
       ret.reserve(ret.size() * 3);
       ret += " (";
       ret += hex_lower(sv2span(str));

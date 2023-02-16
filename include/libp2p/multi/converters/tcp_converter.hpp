@@ -6,7 +6,6 @@
 #ifndef LIBP2P_TCPCONVERTER_HPP
 #define LIBP2P_TCPCONVERTER_HPP
 
-#include <libp2p/common/types.hpp>
 #include <libp2p/outcome/outcome.hpp>
 
 namespace libp2p::multi::converters {
@@ -17,12 +16,8 @@ namespace libp2p::multi::converters {
    */
   class TcpConverter {
    public:
-    [[deprecated("Use `common::hex_lower(addressToBytes(...))` instead")]]  //
-    static outcome::result<std::string>
-    addressToHex(std::string_view addr);
-
-    static outcome::result<common::ByteArray> addressToBytes(
-        std::string_view addr);
+    static auto addressToHex(std::string_view addr)
+        -> outcome::result<std::string>;
   };
 
 }  // namespace libp2p::multi::converters

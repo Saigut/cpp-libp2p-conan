@@ -16,7 +16,7 @@ namespace libp2p::protocol_muxer::multiselect {
 
   namespace {
     const log::Logger &log() {
-      static log::Logger logger = log::createLogger("Multiselect");
+      static log::Logger logger = log::createLogger("multiselect");
       return logger;
     }
   }  // namespace
@@ -25,7 +25,7 @@ namespace libp2p::protocol_muxer::multiselect {
       : owner_(owner) {}
 
   void MultiselectInstance::selectOneOf(
-      gsl::span<const peer::ProtocolName> protocols,
+      gsl::span<const peer::Protocol> protocols,
       std::shared_ptr<basic::ReadWriter> connection, bool is_initiator,
       bool negotiate_multiselect, Multiselect::ProtocolHandlerFunc cb) {
     assert(!protocols.empty());
@@ -58,6 +58,7 @@ namespace libp2p::protocol_muxer::multiselect {
 
     write_queue_.clear();
     is_writing_ = false;
+    ls_response_.reset();
 
     if (is_initiator_) {
       std::ignore = sendProposal();
@@ -93,6 +94,18 @@ namespace libp2p::protocol_muxer::multiselect {
 
     wait_for_protocol_reply_ = true;
     return true;
+  }
+
+  void MultiselectInstance::sendLS() {
+    if (!ls_response_) {
+      auto msg_res = detail::createMessage(protocols_, true);
+      if (!msg_res) {
+        // will defer error
+        return send(msg_res);
+      }
+      ls_response_ = std::make_shared<MsgBuf>(std::move(msg_res.value()));
+    }
+    send(ls_response_.value());
   }
 
   void MultiselectInstance::sendNA() {
@@ -177,7 +190,7 @@ namespace libp2p::protocol_muxer::multiselect {
       return;
     }
 
-    auto bytes_needed = parser_.bytesNeeded();
+    size_t bytes_needed = parser_.bytesNeeded();
 
     assert(bytes_needed > 0);
 
@@ -188,7 +201,7 @@ namespace libp2p::protocol_muxer::multiselect {
     }
 
     gsl::span<uint8_t> span(*read_buffer_);
-    span = span.first(static_cast<Parser::IndexType>(bytes_needed));
+    span = span.first(bytes_needed);
 
     connection_->read(span, bytes_needed,
                       [wptr = weak_from_this(), round = current_round_,
@@ -205,14 +218,14 @@ namespace libp2p::protocol_muxer::multiselect {
       return close(res.error());
     }
 
-    auto bytes_read = res.value();
+    size_t bytes_read = res.value();
     if (bytes_read > read_buffer_->size()) {
       log()->error("onDataRead(): invalid state");
       return close(ProtocolMuxer::Error::INTERNAL_ERROR);
     }
 
     gsl::span<const uint8_t> span(*read_buffer_);
-    span = span.first(static_cast<Parser::IndexType>(bytes_read));
+    span = span.first(bytes_read);
 
     SL_TRACE(log(), "received {}", common::dumpBin(span));
 
@@ -253,6 +266,9 @@ namespace libp2p::protocol_muxer::multiselect {
           break;
         case Message::kNAMessage:
           result = handleNA();
+          break;
+        case Message::kLSMessage:
+          sendLS();
           break;
         case Message::kWrongProtocolVersion: {
           SL_DEBUG(log(), "Received unsupported protocol version: {}",

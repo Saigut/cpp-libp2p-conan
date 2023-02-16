@@ -68,16 +68,17 @@ namespace libp2p::protocol::kademlia {
 
     // handle streams for observed protocol
     host_->setProtocolHandler(
-        {protocol_}, [wp = weak_from_this()](StreamAndProtocol stream) {
+        protocol_,
+        [wp = weak_from_this()](protocol::BaseProtocol::StreamResult rstream) {
           if (auto self = wp.lock()) {
-            self->handleProtocol(std::move(stream));
+            self->handleProtocol(std::move(rstream));
           }
         });
 
     // subscribe to new connection
     new_connection_subscription_ =
         host_->getBus()
-            .getChannel<event::network::OnNewConnectionChannel>()
+            .getChannel<network::event::OnNewConnectionChannel>()
             .subscribe([this](
                            // NOLINTNEXTLINE
                            std::weak_ptr<connection::CapableConnection> conn) {
@@ -112,7 +113,7 @@ namespace libp2p::protocol::kademlia {
   }
 
   outcome::result<void> KademliaImpl::putValue(Key key, Value value) {
-    log_.debug("CALL: PutValue ({})", multi::detail::encodeBase58(key));
+    log_.debug("CALL: PutValue ({})", multi::detail::encodeBase58(key.data));
 
     if (auto res = storage_->putValue(key, std::move(value));
         not res.has_value()) {
@@ -124,17 +125,14 @@ namespace libp2p::protocol::kademlia {
 
   outcome::result<void> KademliaImpl::getValue(const Key &key,
                                                FoundValueHandler handler) {
-    log_.debug("CALL: GetValue ({})", multi::detail::encodeBase58(key));
+    log_.debug("CALL: GetValue ({})", multi::detail::encodeBase58(key.data));
 
     // Check if has actual value locally
     if (auto res = storage_->getValue(key); res.has_value()) {
       auto &[value, ts] = res.value();
       if (scheduler_->now() < ts) {
         if (handler) {
-          scheduler_->schedule(
-              [handler{std::move(handler)}, value{std::move(value)}]() mutable {
-                handler(std::move(value));
-              });
+          handler(std::move(value));
           return outcome::success();
         }
       }
@@ -147,7 +145,7 @@ namespace libp2p::protocol::kademlia {
 
   outcome::result<void> KademliaImpl::provide(const Key &key,
                                               bool need_notify) {
-    log_.debug("CALL: Provide ({})", multi::detail::encodeBase58(key));
+    log_.debug("CALL: Provide ({})", multi::detail::encodeBase58(key.data));
 
     content_routing_table_->addProvider(key, self_id_);
 
@@ -162,7 +160,8 @@ namespace libp2p::protocol::kademlia {
 
   outcome::result<void> KademliaImpl::findProviders(
       const Key &key, size_t limit, FoundProvidersHandler handler) {
-    log_.debug("CALL: FindProviders ({})", multi::detail::encodeBase58(key));
+    log_.debug("CALL: FindProviders ({})",
+               multi::detail::encodeBase58(key.data));
 
     // Try to find locally
     auto providers = content_routing_table_->getProvidersFor(key, limit);
@@ -306,7 +305,7 @@ namespace libp2p::protocol::kademlia {
     }
     auto &[key, value, ts] = msg.record.value();
 
-    log_.debug("MSG: PutValue ({})", multi::detail::encodeBase58(key));
+    log_.debug("MSG: PutValue ({})", multi::detail::encodeBase58(key.data));
 
     auto validation_res = validator_->validate(key, value);
     if (not validation_res) {
@@ -315,20 +314,11 @@ namespace libp2p::protocol::kademlia {
       return;
     }
 
-    auto res = putValue(key, value);
+    auto res = putValue(key, std::move(value));
     if (!res) {
       log_.warn("incoming PutValue failed: {}", res.error().message());
       return;
     }
-
-    // echo request
-    auto buffer = std::make_shared<std::vector<uint8_t>>();
-    if (not msg.serialize(*buffer)) {
-      session->close(Error::MESSAGE_SERIALIZE_ERROR);
-      BOOST_UNREACHABLE_RETURN();
-    }
-
-    session->write(buffer, {});
   }
 
   void KademliaImpl::onGetValue(const std::shared_ptr<Session> &session,
@@ -338,9 +328,16 @@ namespace libp2p::protocol::kademlia {
       return;
     }
 
-    log_.debug("MSG: GetValue ({})", multi::detail::encodeBase58(msg.key));
+    auto cid_res = ContentId::fromWire(msg.key);
+    if (!cid_res) {
+      log_.warn("incoming GetValue failed: invalid key in message");
+      return;
+    }
+    auto &cid = cid_res.value();
 
-    if (auto providers = content_routing_table_->getProvidersFor(msg.key);
+    log_.debug("MSG: GetValue ({})", multi::detail::encodeBase58(cid.data));
+
+    if (auto providers = content_routing_table_->getProvidersFor(cid);
         not providers.empty()) {
       std::vector<Message::Peer> peers;
       peers.reserve(config_.closerPeerCount);
@@ -360,10 +357,10 @@ namespace libp2p::protocol::kademlia {
       msg.provider_peers = std::move(peers);
     }
 
-    auto res = storage_->getValue(msg.key);
+    auto res = storage_->getValue(cid);
     if (res) {
       auto &[value, expire] = res.value();
-      msg.record = Message::Record{std::move(msg.key), std::move(value),
+      msg.record = Message::Record{std::move(cid), std::move(value),
                                    std::to_string(expire.count())};
     }
 
@@ -383,14 +380,21 @@ namespace libp2p::protocol::kademlia {
       return;
     }
 
-    log_.debug("MSG: AddProvider ({})", multi::detail::encodeBase58(msg.key));
+    auto cid_res = ContentId::fromWire(msg.key);
+    if (not cid_res) {
+      log_.warn("AddProvider failed: invalid key in message");
+      return;
+    }
+    auto &cid = cid_res.value();
+
+    log_.debug("MSG: AddProvider ({})", multi::detail::encodeBase58(cid.data));
 
     auto &providers = msg.provider_peers.value();
     for (auto &provider : providers) {
       if (auto peer_id_res = session->stream()->remotePeerId()) {
         if (peer_id_res.value() == provider.info.id) {
           // Save providers who have provided themselves
-          content_routing_table_->addProvider(msg.key, provider.info.id);
+          content_routing_table_->addProvider(cid, provider.info.id);
           addPeer(provider.info, false);
         }
       }
@@ -404,10 +408,17 @@ namespace libp2p::protocol::kademlia {
       return;
     }
 
-    log_.debug("MSG: GetProviders ({})", multi::detail::encodeBase58(msg.key));
+    auto cid_res = ContentId::fromWire(msg.key);
+    if (not cid_res) {
+      log_.warn("GetProviders failed: invalid key in message");
+      return;
+    }
+    auto &cid = cid_res.value();
+
+    log_.debug("MSG: GetProviders ({})", multi::detail::encodeBase58(cid.data));
 
     auto peer_ids = content_routing_table_->getProvidersFor(
-        msg.key, config_.closerPeerCount * 2);
+        cid, config_.closerPeerCount * 2);
 
     if (not peer_ids.empty()) {
       std::vector<Message::Peer> peers;
@@ -431,7 +442,7 @@ namespace libp2p::protocol::kademlia {
     }
 
     peer_ids = peer_routing_table_->getNearestPeers(
-        NodeId(msg.key), config_.closerPeerCount * 2);
+        NodeId(cid), config_.closerPeerCount * 2);
 
     if (not peer_ids.empty()) {
       std::vector<Message::Peer> peers;
@@ -465,11 +476,6 @@ namespace libp2p::protocol::kademlia {
 
   void KademliaImpl::onFindNode(const std::shared_ptr<Session> &session,
                                 Message &&msg) {
-    if (msg.key.empty()) {
-      log_.warn("FindNode failed: empty key in message");
-      return;
-    }
-
     if (msg.closer_peers) {
       for (auto &peer : msg.closer_peers.value()) {
         if (peer.conn_status != Message::Connectedness::CAN_NOT_CONNECT) {
@@ -488,10 +494,17 @@ namespace libp2p::protocol::kademlia {
       msg.closer_peers.reset();
     }
 
-    log_.debug("MSG: FindNode ({})", multi::detail::encodeBase58(msg.key));
+    auto cid_res = ContentId::fromWire(msg.key);
+    if (not cid_res) {
+      log_.warn("FindNode failed: invalid key in message");
+      return;
+    }
+    auto &cid = cid_res.value();
+
+    log_.debug("MSG: FindNode ({})", multi::detail::encodeBase58(cid.data));
 
     auto ids = peer_routing_table_->getNearestPeers(
-        NodeId(msg.key), config_.closerPeerCount * 2);
+        NodeId(cid), config_.closerPeerCount * 2);
 
     std::vector<Message::Peer> peers;
     peers.reserve(config_.closerPeerCount);
@@ -603,8 +616,15 @@ namespace libp2p::protocol::kademlia {
     log_.debug("session completed, total sessions: {}", sessions_.size());
   }
 
-  void KademliaImpl::handleProtocol(StreamAndProtocol stream_and_protocol) {
-    auto &stream = stream_and_protocol.stream;
+  void KademliaImpl::handleProtocol(
+      protocol::BaseProtocol::StreamResult stream_res) {
+    if (!stream_res) {
+      log_.warn("incoming stream failed due to '{}'",
+                stream_res.error().message());
+      return;
+    }
+
+    auto &stream = stream_res.value();
 
     if (stream->remotePeerId().value() == self_id_) {
       log_.debug("incoming stream with themselves");

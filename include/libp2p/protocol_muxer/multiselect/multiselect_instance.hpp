@@ -24,7 +24,7 @@ namespace libp2p::protocol_muxer::multiselect {
     explicit MultiselectInstance(Multiselect &owner);
 
     /// Implements ProtocolMuxer API
-    void selectOneOf(gsl::span<const peer::ProtocolName> protocols,
+    void selectOneOf(gsl::span<const peer::Protocol> protocols,
                      std::shared_ptr<basic::ReadWriter> connection,
                      bool is_initiator, bool negotiate_multiselect,
                      Multiselect::ProtocolHandlerFunc cb);
@@ -40,6 +40,9 @@ namespace libp2p::protocol_muxer::multiselect {
 
     /// Sends protocol proposal, returns false when all proposals exhausted
     bool sendProposal();
+
+    /// Sends LS reply message
+    void sendLS();
 
     /// Sends NA reply message
     void sendNA();
@@ -121,6 +124,9 @@ namespace libp2p::protocol_muxer::multiselect {
 
     /// True if waiting for write callback
     bool is_writing_ = false;
+
+    /// Cache: serialized LS response
+    boost::optional<Packet> ls_response_;
 
     /// Cache: serialized NA response
     boost::optional<Packet> na_response_;

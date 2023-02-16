@@ -47,6 +47,7 @@ namespace libp2p::connection {
       STREAM_RECEIVE_OVERFLOW,
     };
 
+    using Handler = void(std::shared_ptr<Stream>);
     using VoidResultHandlerFunc = std::function<void(outcome::result<void>)>;
 
     ~Stream() override = default;

@@ -8,9 +8,9 @@
 #include <string>
 #include <unordered_set>
 
-#include <generated/protocol/identify/protobuf/identify.pb.h>
 #include <libp2p/basic/protobuf_message_read_writer.hpp>
 #include <libp2p/protocol/identify/utils.hpp>
+#include <generated/protocol/identify/protobuf/identify.pb.h>
 
 namespace {
   const std::string kIdentifyDeltaProtocol = "/p2p/id/delta/1.0.0";
@@ -22,34 +22,38 @@ namespace libp2p::protocol {
                                event::Bus &bus)
       : host_{host}, conn_manager_{conn_manager}, bus_{bus} {}
 
-  peer::ProtocolName IdentifyDelta::getProtocolId() const {
+  peer::Protocol IdentifyDelta::getProtocolId() const {
     return kIdentifyDeltaProtocol;
   }
 
-  void IdentifyDelta::handle(StreamAndProtocol stream) {
+  void IdentifyDelta::handle(StreamResult stream_res) {
+    if (!stream_res) {
+      return;
+    }
     // receive a Delta message
-    auto rw = std::make_shared<basic::ProtobufMessageReadWriter>(stream.stream);
+    auto rw =
+        std::make_shared<basic::ProtobufMessageReadWriter>(stream_res.value());
     rw->read<identify::pb::Identify>(
         [self{shared_from_this()},
-         s = std::move(stream.stream)](auto &&msg_res) {
+         s = std::move(stream_res.value())](auto &&msg_res) {
           self->deltaReceived(std::forward<decltype(msg_res)>(msg_res), s);
         });
   }
 
   void IdentifyDelta::start() {
     new_protos_sub_ =
-        bus_.getChannel<event::network::ProtocolsAddedChannel>().subscribe(
-            [self{weak_from_this()}](std::vector<peer::ProtocolName> new_protos) {
+        bus_.getChannel<network::event::ProtocolsAddedChannel>().subscribe(
+            [self{weak_from_this()}](std::vector<peer::Protocol> new_protos) {
               if (auto s = self.lock()) {
                 return self.lock()->sendDelta(
-                    new_protos, gsl::span<const peer::ProtocolName>());
+                    new_protos, gsl::span<const peer::Protocol>());
               }
             });
     rm_protos_sub_ =
-        bus_.getChannel<event::network::ProtocolsRemovedChannel>().subscribe(
-            [self{weak_from_this()}](std::vector<peer::ProtocolName> rm_protos) {
+        bus_.getChannel<network::event::ProtocolsRemovedChannel>().subscribe(
+            [self{weak_from_this()}](std::vector<peer::Protocol> rm_protos) {
               if (auto s = self.lock()) {
-                return self.lock()->sendDelta(gsl::span<const peer::ProtocolName>(),
+                return self.lock()->sendDelta(gsl::span<const peer::Protocol>(),
                                               rm_protos);
               }
             });
@@ -97,7 +101,7 @@ namespace libp2p::protocol {
     auto &proto_repo = host_.getPeerRepository().getProtocolRepository();
 
     // more beautiful ways cause compile errors :(
-    std::vector<peer::ProtocolName> added_protocols;
+    std::vector<peer::Protocol> added_protocols;
     added_protocols.reserve(delta_msg.added_protocols().size());
     for (const auto &proto : delta_msg.added_protocols()) {
       added_protocols.push_back(proto);
@@ -108,7 +112,7 @@ namespace libp2p::protocol {
                   peer_addr_str, add_res.error().message());
     }
 
-    std::vector<peer::ProtocolName> rm_protocols;
+    std::vector<peer::Protocol> rm_protocols;
     rm_protocols.reserve(delta_msg.rm_protocols().size());
     for (const auto &proto : delta_msg.rm_protocols()) {
       rm_protocols.push_back(proto);
@@ -120,8 +124,8 @@ namespace libp2p::protocol {
     }
   }
 
-  void IdentifyDelta::sendDelta(gsl::span<const peer::ProtocolName> added,
-                                gsl::span<const peer::ProtocolName> removed) {
+  void IdentifyDelta::sendDelta(gsl::span<const peer::Protocol> added,
+                                gsl::span<const peer::Protocol> removed) {
     auto msg = std::make_shared<identify::pb::Identify>();
     for (const auto &proto : added) {
       msg->mutable_delta()->add_added_protocols(proto);
@@ -131,12 +135,12 @@ namespace libp2p::protocol {
     }
 
     detail::streamToEachConnectedPeer(
-        host_, conn_manager_, {kIdentifyDeltaProtocol},
+        host_, conn_manager_, kIdentifyDeltaProtocol,
         [self{shared_from_this()}, msg](auto s_res) {
           if (!s_res) {
             return;
           }
-          self->sendDelta(std::move(s_res.value().stream), msg);
+          self->sendDelta(std::move(s_res.value()), msg);
         });
   }
 

@@ -17,6 +17,7 @@ namespace libp2p::protocol::kademlia {
       INVALID_CONNECTEDNESS = 1,
       INVALID_PEER_ID,
       INVALID_ADDRESSES,
+      INVALID_KEY,
     };
 
     enum class Type {

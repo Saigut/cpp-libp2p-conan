@@ -214,7 +214,7 @@ namespace libp2p::network {
               this->router_->getSupportedProtocols(), stream,
               false /* not initiator */,
               true /* need to negotiate multistream itself - SPEC ???*/,
-              [this, stream](outcome::result<peer::ProtocolName> rproto) {
+              [this, stream](outcome::result<peer::Protocol> rproto) {
                 bool success = true;
 
                 if (!rproto) {
@@ -240,6 +240,17 @@ namespace libp2p::network {
 
     // store connection
     this->cmgr_->addConnectionToPeer(id, conn);
+  }
+
+  void ListenerManagerImpl::setProtocolHandler(const peer::Protocol &protocol,
+                                               StreamResultFunc cb) {
+    this->router_->setProtocolHandler(protocol, std::move(cb));
+  }
+
+  void ListenerManagerImpl::setProtocolHandler(
+      const peer::Protocol &protocol, StreamResultFunc cb,
+      Router::ProtoPredicate predicate) {
+    this->router_->setProtocolHandler(protocol, std::move(cb), predicate);
   }
 
   Router &ListenerManagerImpl::getRouter() {

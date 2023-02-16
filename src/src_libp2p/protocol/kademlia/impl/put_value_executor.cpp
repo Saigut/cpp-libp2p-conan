@@ -90,7 +90,7 @@ namespace libp2p::protocol::kademlia {
           config_.connectionTimeout);
 
       host_->newStream(
-          peer_info, {config_.protocolId},
+          peer_info, config_.protocolId,
           [holder](auto &&stream_res) {
             if (holder->first) {
               holder->second.cancel();
@@ -107,7 +107,8 @@ namespace libp2p::protocol::kademlia {
     }
   }
 
-  void PutValueExecutor::onConnected(StreamAndProtocolOrError stream_res) {
+  void PutValueExecutor::onConnected(
+      outcome::result<std::shared_ptr<connection::Stream>> stream_res) {
     if (not stream_res) {
       --requests_in_progress_;
 
@@ -119,7 +120,7 @@ namespace libp2p::protocol::kademlia {
       return;
     }
 
-    auto &stream = stream_res.value().stream;
+    auto &stream = stream_res.value();
     assert(stream->remoteMultiaddr().has_value());
 
     std::string addr(stream->remoteMultiaddr().value().getStringAddress());
@@ -132,41 +133,15 @@ namespace libp2p::protocol::kademlia {
 
     auto session = session_host_->openSession(stream);
 
-    if (!session->write(serialized_request_, shared_from_this())) {
-      --requests_in_progress_;
-      log_.debug("write to {} failed; done {}, active {}, in queue {}", addr,
-                 requests_succeed_, requests_in_progress_,
-                 addressees_.size() - addressees_idx_);
-      spawn();
-    }
-  }
-
-  Time PutValueExecutor::responseTimeout() const {
-    return config_.responseTimeout;
-  }
-
-  bool PutValueExecutor::match(const Message &msg) const {
-    return
-        // Check if message type is appropriate
-        msg.type == Message::Type::kPutValue
-        // Check if response is accorded to request
-        && msg.key == key_;
-  }
-
-  void PutValueExecutor::onResult(const std::shared_ptr<Session> &session,
-                                  outcome::result<Message> msg_res) {
     --requests_in_progress_;
 
-    if (msg_res.has_error()) {
-      log_.debug(
-          "write to {} failed; done {}, active {}, in queue {}; error: {}",
-          session->stream()->remotePeerId().value().toBase58(),
-          requests_succeed_, requests_in_progress_,
-          addressees_.size() - addressees_idx_, msg_res.error().message());
-    } else {
+    if (session->write(serialized_request_, {})) {
       ++requests_succeed_;
       log_.debug("write to {} successfuly; done {}, active {}, in queue {}",
-                 session->stream()->remotePeerId().value().toBase58(),
+                 addr, requests_succeed_, requests_in_progress_,
+                 addressees_.size() - addressees_idx_);
+    } else {
+      log_.debug("write to {} failed; done {}, active {}, in queue {}", addr,
                  requests_succeed_, requests_in_progress_,
                  addressees_.size() - addressees_idx_);
     }

@@ -15,25 +15,29 @@ namespace libp2p::network {
    public:
     ~RouterImpl() override = default;
 
-    void setProtocolHandler(StreamProtocols protocols, StreamAndProtocolCb cb,
-                            ProtocolPredicate predicate = {}) override;
+    void setProtocolHandler(const peer::Protocol &protocol,
+                            const ProtoHandler &handler) override;
 
-    std::vector<peer::ProtocolName> getSupportedProtocols() const override;
+    void setProtocolHandler(const peer::Protocol &protocol,
+                            const ProtoHandler &handler,
+                            const ProtoPredicate &predicate) override;
 
-    void removeProtocolHandlers(const peer::ProtocolName &protocol) override;
+    std::vector<peer::Protocol> getSupportedProtocols() const override;
+
+    void removeProtocolHandlers(const peer::Protocol &protocol) override;
 
     void removeAll() override;
 
     enum class Error { NO_HANDLER_FOUND = 1 };
 
     outcome::result<void> handle(
-        const peer::ProtocolName &p,
+        const peer::Protocol &p,
         std::shared_ptr<connection::Stream> stream) override;
 
    private:
     struct PredicateAndHandler {
-      ProtocolPredicate predicate;
-      StreamAndProtocolCb handler;
+      ProtoPredicate predicate;
+      ProtoHandler handler;
     };
     tsl::htrie_map<char, PredicateAndHandler> proto_handlers_;
   };

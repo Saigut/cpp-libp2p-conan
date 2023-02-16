@@ -46,10 +46,6 @@ namespace libp2p::basic {
             }
 
             auto &&buf = res.value();
-            if (!buf) {
-              return cb(ProtoMsgType{});
-            }
-
             ProtoMsgType msg;
             msg.ParseFromArray(buf->data(), buf->size());
             if (bytes) {

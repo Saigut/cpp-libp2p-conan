@@ -27,6 +27,9 @@ namespace libp2p::protocol_muxer::multiselect {
   /// Special message N/A
   static constexpr std::string_view kNA("na");
 
+  /// ls request
+  static constexpr std::string_view kLS("ls");
+
   /// Multiselect protocol message, deflated
   struct Message {
     enum Type {

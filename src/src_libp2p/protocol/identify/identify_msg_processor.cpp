@@ -18,13 +18,13 @@ namespace {
   inline std::string fromMultiaddrToString(
       const libp2p::multi::Multiaddress &ma) {
     auto const &addr = ma.getBytesAddress();
-    return {addr.begin(), addr.end()};
+    return std::string(addr.begin(), addr.end());
   }
 
   inline libp2p::outcome::result<libp2p::multi::Multiaddress>
   fromStringToMultiaddr(const std::string &addr) {
     return libp2p::multi::Multiaddress::create(gsl::span<const uint8_t>(
-        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast,cppcoreguidelines-narrowing-conversions)
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
         reinterpret_cast<const uint8_t *>(addr.data()), addr.size()));
   }
 }  // namespace
@@ -168,7 +168,7 @@ namespace libp2p::protocol {
     auto peer_id = std::move(*peer_id_opt);
 
     // store the received protocols
-    std::vector<peer::ProtocolName> protocols;
+    std::vector<peer::Protocol> protocols;
     for (const auto &proto : msg.protocols()) {
       protocols.push_back(proto);
     }

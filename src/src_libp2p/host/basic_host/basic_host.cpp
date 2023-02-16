@@ -130,26 +130,31 @@ namespace libp2p::host {
     return Connectedness::CAN_NOT_CONNECT;
   }
 
-  void BasicHost::setProtocolHandler(StreamProtocols protocols,
-                                     StreamAndProtocolCb cb,
-                                     ProtocolPredicate predicate) {
-    network_->getListener().getRouter().setProtocolHandler(
-        std::move(protocols), std::move(cb), std::move(predicate));
+  void BasicHost::setProtocolHandler(
+      const peer::Protocol &proto,
+      const std::function<connection::Stream::Handler> &handler) {
+    network_->getListener().getRouter().setProtocolHandler(proto, handler);
   }
 
-  void BasicHost::newStream(const peer::PeerInfo &peer_info,
-                            StreamProtocols protocols,
-                            StreamAndProtocolOrErrorCb cb,
+  void BasicHost::setProtocolHandler(
+      const peer::Protocol &proto,
+      const std::function<connection::Stream::Handler> &handler,
+      const std::function<bool(const peer::Protocol &)> &predicate) {
+    network_->getListener().getRouter().setProtocolHandler(proto, handler,
+                                                           predicate);
+  }
+
+  void BasicHost::newStream(const peer::PeerInfo &p,
+                            const peer::Protocol &protocol,
+                            const Host::StreamResultHandler &handler,
                             std::chrono::milliseconds timeout) {
-    network_->getDialer().newStream(peer_info, std::move(protocols),
-                                    std::move(cb), timeout);
+    network_->getDialer().newStream(p, protocol, handler, timeout);
   }
 
   void BasicHost::newStream(const peer::PeerId &peer_id,
-                            StreamProtocols protocols,
-                            StreamAndProtocolOrErrorCb cb) {
-    network_->getDialer().newStream(peer_id, std::move(protocols),
-                                    std::move(cb));
+                            const peer::Protocol &protocol,
+                            const StreamResultHandler &handler) {
+    network_->getDialer().newStream(peer_id, protocol, handler);
   }
 
   outcome::result<void> BasicHost::listen(const multi::Multiaddress &ma) {
@@ -172,7 +177,7 @@ namespace libp2p::host {
 
   event::Handle BasicHost::setOnNewConnectionHandler(
       const NewConnectionHandler &h) const {
-    return bus_->getChannel<event::network::OnNewConnectionChannel>().subscribe(
+    return bus_->getChannel<network::event::OnNewConnectionChannel>().subscribe(
         [h{std::move(h)}](auto &&conn) {
           if (auto connection = conn.lock()) {
             auto remote_peer_res = connection->remotePeer();

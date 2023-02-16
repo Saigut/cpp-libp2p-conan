@@ -22,13 +22,10 @@ namespace libp2p::multi {
 
   UVarint::UVarint(gsl::span<const uint8_t> varint_bytes)
       : bytes_(varint_bytes.begin(),
-               // NOLINTNEXTLINE(cppcoreguidelines-narrowing-conversions)
                varint_bytes.begin() + calculateSize(varint_bytes)) {}
 
   UVarint::UVarint(gsl::span<const uint8_t> varint_bytes, size_t varint_size)
-      : bytes_(varint_bytes.begin(),
-               // NOLINTNEXTLINE(cppcoreguidelines-narrowing-conversions)
-               varint_bytes.begin() + varint_size) {}
+      : bytes_(varint_bytes.begin(), varint_bytes.begin() + varint_size) {}
 
   boost::optional<UVarint> UVarint::create(
       gsl::span<const uint8_t> varint_bytes) {
@@ -49,11 +46,8 @@ namespace libp2p::multi {
     return res;
   }
 
-  gsl::span<const uint8_t> UVarint::toBytes() const & {
-    return gsl::make_span(
-        bytes_.data(),
-        // NOLINTNEXTLINE(cppcoreguidelines-narrowing-conversions)
-        bytes_.size());
+  gsl::span<const uint8_t> UVarint::toBytes() const {
+    return gsl::span(bytes_.data(), bytes_.size());
   }
 
   const std::vector<uint8_t> &UVarint::toVector() const {

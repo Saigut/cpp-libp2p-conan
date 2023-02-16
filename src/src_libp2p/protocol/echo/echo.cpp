@@ -7,13 +7,19 @@
 
 namespace libp2p::protocol {
 
-  void Echo::handle(StreamAndProtocol stream) {
+  void Echo::handle(StreamResult rstream) {
+    if (!rstream) {
+      log_->info("incoming connection failed due to '{}'",
+                 rstream.error().message());
+      return;
+    }
+
     auto session =
-        std::make_shared<ServerEchoSession>(std::move(stream.stream), config_);
+        std::make_shared<ServerEchoSession>(rstream.value(), config_);
     session->start();
   }
 
-  peer::ProtocolName Echo::getProtocolId() const {
+  peer::Protocol Echo::getProtocolId() const {
     return "/echo/1.0.0";
   }
 

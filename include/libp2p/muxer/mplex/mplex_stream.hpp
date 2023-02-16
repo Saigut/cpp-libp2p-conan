@@ -88,15 +88,10 @@ namespace libp2p::connection {
     outcome::result<multi::Multiaddress> remoteMultiaddr() const override;
 
    private:
-    struct Reading {
-      gsl::span<uint8_t> out;
-      size_t bytes;
-      ReadCallbackFunc cb;
-      bool some;
-    };
-
-    void readDone(outcome::result<size_t> res);
-    bool readTry();
+    /**
+     * Internal proxy method for reads; (\param some) denotes if the read should
+     * read 'some' or 'all' bytes
+     */
     void read(gsl::span<uint8_t> out, size_t bytes, ReadCallbackFunc cb,
               bool some);
 
@@ -107,7 +102,9 @@ namespace libp2p::connection {
     /// data, received for this stream, comes here
     boost::asio::streambuf read_buffer_;
 
-    boost::optional<Reading> reading_;
+    /// when a new data arrives, this function is to be called
+    std::function<void(outcome::result<size_t>)> data_notifyee_;
+    bool data_notified_ = false;
 
     /// Queue of write requests that were received when stream was writing
     std::deque<std::tuple<std::vector<uint8_t>, size_t, WriteCallbackFunc>>
@@ -117,6 +114,7 @@ namespace libp2p::connection {
 
     /// is the stream opened for reads?
     bool is_readable_ = true;
+    bool is_reading_ = false;
 
     /// is the stream opened for writes?
     bool is_writable_ = true;
